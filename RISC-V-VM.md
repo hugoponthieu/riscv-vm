@@ -118,7 +118,7 @@ qemu-system-riscv64 \
   -kernel ./u-boot/u-boot.bin \
   -drive file=./ubuntu-riscv64-installer.raw,format=raw,if=virtio \
   -drive file=./ubuntu-24.04.4-live-server-riscv64.iso,format=raw,if=virtio,readonly=on \
-  -netdev user,id=net0 \
+  -netdev user,id=net0,hostfwd=tcp::2222-:22 \
   -device virtio-net-device,netdev=net0 \
   -device virtio-rng-pci \
   -cpu rva23s64
@@ -131,6 +131,7 @@ This is the important part:
 - the disk is your target install disk
 - `virtio` is used for disk and network
 - `rva23s64` matches Ubuntu's current `riscv64` QEMU guidance
+- host port `2222` is forwarded to guest SSH port `22`
 
 ## What to expect during install
 
@@ -158,7 +159,7 @@ qemu-system-riscv64 \
   -nographic \
   -kernel ./u-boot/u-boot.bin \
   -drive file=./ubuntu-riscv64-installer.raw,format=raw,if=virtio \
-  -netdev user,id=net0 \
+  -netdev user,id=net0,hostfwd=tcp::2222-:22 \
   -device virtio-net-device,netdev=net0 \
   -device virtio-rng-pci \
   -cpu rva23s64
@@ -171,12 +172,39 @@ The difference compared with the installer command is simple:
 
 If you keep the installer ISO attached after installation, the VM may try to boot the installer again instead of booting the installed Ubuntu system.
 
+## SSH access from the host
+
+With raw QEMU user networking, outbound guest networking works by default, but host-to-guest SSH does not work unless you add a port forward.
+
+That is why the commands in this guide use:
+
+```text
+-netdev user,id=net0,hostfwd=tcp::2222-:22
+```
+
+That means:
+
+- host port `2222` forwards to guest port `22`
+- you connect from the host to `127.0.0.1`
+
+Use:
+
+```bash
+ssh -p 2222 <your-ubuntu-user>@127.0.0.1
+```
+
+Example:
+
+```bash
+ssh -p 2222 ubuntu@127.0.0.1
+```
+
 ## Networking in this setup
 
 This raw QEMU installer command uses:
 
 ```text
--netdev user,id=net0
+-netdev user,id=net0,hostfwd=tcp::2222-:22
 -device virtio-net-device,netdev=net0
 ```
 
@@ -186,6 +214,7 @@ What that means:
 
 - the VM should have outbound network access
 - package downloads during install should work
+- SSH from the host works through `127.0.0.1:2222`
 - this is simpler than setting up a bridge
 
 If you later want the installed Ubuntu VM under libvirt instead, you can switch to a managed libvirt VM after installation. For the installer itself, this raw serial setup is the simpler path.
@@ -263,8 +292,23 @@ ls -lh ./u-boot/u-boot.bin
 Double-check that these arguments are present:
 
 ```text
--netdev user,id=net0
+-netdev user,id=net0,hostfwd=tcp::2222-:22
 -device virtio-net-device,netdev=net0
+```
+
+### SSH from the host hangs
+
+Check these points:
+
+- make sure you restarted the VM with `hostfwd=tcp::2222-:22`
+- make sure the guest has `openssh-server` installed
+- make sure the SSH service is running in the guest
+- make sure you are connecting to `127.0.0.1` on port `2222`
+
+Host command:
+
+```bash
+ssh -p 2222 <your-ubuntu-user>@127.0.0.1
 ```
 
 ### The install feels slow
